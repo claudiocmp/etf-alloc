@@ -1,17 +1,18 @@
 """Module for handling environment variables"""
 
-from typing import Optional
-import yaml
-import jinja2
-import pandas as pd
 import dataclasses
 import json
 import os
 import pathlib
-from typing import Any
 import typing
+from typing import Any, Optional
 
+import jinja2
+import pandas as pd
+import yaml
 from jinja2 import Environment, select_autoescape
+
+from tradingo import templates
 
 env = Environment(autoescape=select_autoescape())
 
@@ -71,7 +72,6 @@ def _read_dict(cls, val):
 
 
 def type_shed(field: dataclasses.Field, val, prefix, env) -> Any:
-
     cls = get_cls(field.type)
 
     if isinstance(cls, tuple):
@@ -96,7 +96,7 @@ def type_shed(field: dataclasses.Field, val, prefix, env) -> Any:
             env=env,
         )
 
-    if isinstance(cls, typing.Callable):
+    if callable(cls):
         return cls(val)
 
     raise EnvProviderError(f"Unhandled type {cls} in config")
@@ -104,7 +104,6 @@ def type_shed(field: dataclasses.Field, val, prefix, env) -> Any:
 
 @dataclasses.dataclass
 class EnvProvider:
-
     app_prefix: Optional[str]
 
     @classmethod
@@ -160,7 +159,6 @@ class EnvProvider:
         app_prefix: str | None = None,
         env: dict[str, Any] | None = None,
     ):
-
         try:
             app_prefix = app_prefix or getattr(cls, "app_prefix")
         except AttributeError as ex:
@@ -197,3 +195,36 @@ class EnvProvider:
         if variables.suffix == ".yaml":
             return cls.from_env(env=yaml.safe_load(rendered))
         raise ValueError(variables.suffix)
+
+
+@dataclasses.dataclass
+class IGTradingConfig(EnvProvider):
+    """IG Trading configuration"""
+
+    password: str
+    username: str
+    api_key: str
+    acc_type: str
+    app_prefix = "IG_SERVICE"
+
+
+@dataclasses.dataclass
+class TradingoConfig(EnvProvider):
+    """Tradingo configuration"""
+
+    config_home: pathlib.Path
+    arctic_uri: str
+    templates: pathlib.Path = pathlib.Path(templates.__file__).parent
+    include_instruments: bool = False
+    app_prefix = "TP"
+
+
+@dataclasses.dataclass
+class SMTPConfig(EnvProvider):
+    """SMTP server configuration"""
+
+    server_uri: str
+    port: int
+    username: str
+    password: str
+    app_prefix = "SMTP"

@@ -1,15 +1,15 @@
 from __future__ import annotations
+
 import functools
 import inspect
 import logging
 from collections import defaultdict
-from typing import NamedTuple, Optional
+from typing import DefaultDict, NamedTuple, Optional
+from urllib.parse import parse_qsl, urlparse
 
 import arcticdb as adb
 import pandas as pd
-from urllib.parse import urlparse, parse_qsl
 from arcticdb_ext.exceptions import InternalException
-
 
 logger = logging.getLogger(__name__)
 
@@ -19,7 +19,6 @@ class SymbolParseError(Exception):
 
 
 def add_params(function, *args):
-
     origsig = inspect.signature(function)
     orig_params = list(origsig.parameters.values())
     for arg in args:
@@ -38,7 +37,6 @@ def add_params(function, *args):
 
 
 class Symbol(NamedTuple):
-
     library: str
     symbol: str
     kwargs: dict
@@ -80,9 +78,7 @@ class Symbol(NamedTuple):
 
 
 def lib_provider(**libs):
-
     def decorator(func):
-
         @functools.wraps(func)
         def wrapper(*args, arctic: adb.Arctic, **kwargs):
             libs_ = {
@@ -111,9 +107,7 @@ def symbol_provider(
     no_date=False,
     **symbols,
 ):
-
     def decorator(func):
-
         @functools.wraps(func)
         def wrapper(
             *args,
@@ -122,7 +116,6 @@ def symbol_provider(
             end_date=None,
             **kwargs,
         ):
-
             orig_symbol_data = {}
             requested_symbols = symbols.copy()
 
@@ -136,10 +129,31 @@ def symbol_provider(
                 if symbol in kwargs and kwargs[symbol] is None:
                     requested_symbols.pop(symbol)
 
-            def get_symbol_data(v, with_no_date=False):
+            def get_symbol_data(v: str | list[str], with_no_date=False) -> pd.DataFrame:
+                if isinstance(v, dict):
+                    return {
+                        key: get_symbol_data(item, with_no_date=with_no_date)
+                        for key, item in v.items()
+                    }
+                if isinstance(v, list):
+                    multidata = pd.concat(
+                        (
+                            get_symbol_data(item, with_no_date=with_no_date)
+                            for item in v
+                        ),
+                        axis=1,
+                        keys=v,
+                    )
+                    columns = multidata.columns.get_level_values(1).drop_duplicates(
+                        keep="first"
+                    )
+                    multidata = (
+                        multidata.transpose().groupby(level=1).last().transpose()
+                    )
+                    return multidata[columns]
                 symbol = Symbol.parse(v, kwargs, symbol_prefix=symbol_prefix)
                 try:
-                    return (
+                    data = (
                         arctic.get_library(
                             symbol.library,
                             create_if_missing=True,
@@ -158,6 +172,13 @@ def symbol_provider(
                         )
                         .data
                     )
+                    if (
+                        not with_no_date
+                        and isinstance(data.index, pd.DatetimeIndex)
+                        and not data.index.tz
+                    ):
+                        data.index = data.index.tz_localize("UTC")
+                    return data
                 except InternalException as ex:
                     if "The data for this symbol is pickled" in ex.args[0]:
                         return get_symbol_data(v, with_no_date=True)
@@ -219,9 +240,7 @@ def symbol_publisher(
     library_options=None,
     write_pickle=False,
 ):
-
     def decorator(func):
-
         @functools.wraps(func)
         def wrapper(
             *args,
@@ -231,23 +250,18 @@ def symbol_publisher(
             clean: bool = False,
             **kwargs,
         ):
-
             out = envoke_symbology_function(func, args, kwargs, arctic)
             logger.info("Publishing %s to %s", symbols or template, arctic)
 
-            # yf kws:
-            #    kwdout = out.pop(-1)
-            #
             if template:
-                out, symbols_ = list(zip(*out))
-                symbols_ = [template.format(*s) for s in symbols_]
+                out, symbols_ = tuple(zip(*out))
+                formatted_symbols = tuple(template.format(*s) for s in symbols_)
             else:
-                symbols_ = symbols
+                formatted_symbols = symbols
 
-            libraries = defaultdict(dict)
+            libraries: DefaultDict[str, dict] = defaultdict(dict)
 
-            for data, symbol in zip(out, symbols_):
-
+            for data, symbol in zip(out, formatted_symbols):
                 if data.empty:
                     continue
 
@@ -271,9 +285,11 @@ def symbol_publisher(
                         len(data.index),
                     )
 
-                    lib, sym, params = parsed_symbol
+                    lib_name, sym, params = parsed_symbol
                     lib = arctic.get_library(
-                        lib, create_if_missing=True, library_options=library_options
+                        lib_name,
+                        create_if_missing=True,
+                        library_options=library_options,
                     )
                     if isinstance(data.index, pd.DatetimeIndex):
                         if clean:
@@ -304,7 +320,7 @@ def symbol_publisher(
                     lib.snapshot(snapshot_name=snapshot, versions=versions)
 
             if dry_run:
-                return pd.concat(out, keys=symbols_, axis=1)
+                return pd.concat(out, keys=formatted_symbols, axis=1)
 
             return None
 
