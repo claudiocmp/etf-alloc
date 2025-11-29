@@ -2,6 +2,56 @@
 
 Declarative signal and portfolio construction framework evaluated on a dag.
 
+## Git Workflow
+
+- **`main`**: Synced with upstream, used for contributing PRs
+- **`prod`**: Deployment branch with merged features and custom CI/CD
+  - Install via: `pip install git+https://github.com/claudiocmp/etf-alloc.git@prod`
+  - this fork tags must have the format `[0-9]+.[0-9]+.[0-9]+.claudiocmp.[0-9]+`
+
+### Branch Structure
+```
+upstream/main (rorymcstay/etf-alloc)
+    ↓
+origin/main (claudiocmp/etf-alloc) ← synced with upstream, clean for PRs
+    ↓
+origin/prod ← deployment branch with custom CI/CD + early features
+    ↓
+feature-1, ..., feature-n ← individual feature branches
+```
+
+### Development Workflow
+```
+# For temporary deployment to prod
+feature-1, ..., feature-n
+    ↓
+origin/prod
+
+# For raising changes against upstream
+feature-1, ..., feature-n
+    ↓
+upstream/main
+```
+
+### After Feature Merged Upstream
+
+After the feature is merged, `git fetch upstream`, raise a PR `upstream/main` → `origin/main`, and update prod:
+```
+upstream/main
+    ↓
+origin/main
+    ↓
+origin/prod
+```
+
+### Installation
+```bash
+# from prod
+pip install git+https://github.com/claudiocmp/etf-alloc.git@prod
+# custom tag (only on prod)
+pip install git+https://github.com/claudiocmp/etf-alloc.git@0.1.0-claudiocmp.1
+```
+
 ## Configuration
 
 Tradingo is a declarative framework: configs are its core. A configuration represent a set of tasks executed in one DAG. Typically, a task is an ETL made of dependencies, function, parameters and output. While dependencies or output might be omitted, a function and its parameters (if any) are always needed. A task configuration looks like this:

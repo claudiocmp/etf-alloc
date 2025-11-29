@@ -3,10 +3,7 @@ name: Tradingo Test build deploy
 on:
   push:
     tags:
-      - "[0-9]+.[0-9]+.[0-9]+"
-
-permissions:
-  id-token: write
+      - "[0-9]+.[0-9]+.[0-9]+.claudiocmp.[0-9]+"
 
 jobs:
   build:
@@ -43,4 +40,4 @@ jobs:
       - name: Build a binary wheel and a source tarball
         run: python -m build --sdist --outdir dist/
       - name: Publish distribution to PyPI
-        uses: pypa/gh-action-pypi-publish@release/v1
+        run: echo "Skipping PyPI publish in fork workflow"
