@@ -7,7 +7,7 @@ Declarative signal and portfolio construction framework evaluated on a dag.
 - **`main`**: Synced with upstream, used for contributing PRs
 - **`prod`**: Deployment branch with merged features and custom CI/CD
   - Install via: `pip install git+https://github.com/claudiocmp/etf-alloc.git@prod`
-
+  - non-upstream tags should be in the format `.cludiocmp.1`
 
 ### Branch Structure
 ```
@@ -46,7 +46,10 @@ origin/prod
 
 ### Installation
 ```bash
+# from prod
 pip install git+https://github.com/claudiocmp/etf-alloc.git@prod
+# custom tag (only on prod)
+pip install git+https://github.com/claudiocmp/etf-alloc.git@0.1.0-cludiocmp.1
 ```
 
 ## Configuration
